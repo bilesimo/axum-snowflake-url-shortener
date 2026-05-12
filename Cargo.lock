@@ -1848,6 +1848,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "http-body-util",
  "redis",
  "serde",
  "serde_json",

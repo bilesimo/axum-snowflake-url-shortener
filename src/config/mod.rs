@@ -1,5 +1,7 @@
 use std::{env, net::SocketAddr};
 
+use axum::http::StatusCode;
+
 use crate::error::AppError;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -23,7 +25,7 @@ impl AppConfig {
                 .unwrap_or_else(|_| "postgres://postgres:postgres@127.0.0.1:5432/url_shortener".to_owned()),
             redis_url: env::var("REDIS_URL")
                 .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_owned()),
-            redirect_status_code: parse_env("REDIRECT_STATUS_CODE", 302)?,
+            redirect_status_code: parse_redirect_status_code()?,
         })
     }
 
@@ -31,6 +33,13 @@ impl AppConfig {
         format!("{}:{}", self.host, self.port)
             .parse()
             .expect("invalid bind address")
+    }
+
+    pub fn redirect_status(&self) -> StatusCode {
+        match self.redirect_status_code {
+            301 => StatusCode::MOVED_PERMANENTLY,
+            _ => StatusCode::FOUND,
+        }
     }
 }
 
@@ -45,6 +54,17 @@ where
         Err(env::VarError::NotPresent) => Ok(default),
         Err(_) => Err(AppError::Configuration(format!(
             "failed to read environment variable `{key}`"
+        ))),
+    }
+}
+
+fn parse_redirect_status_code() -> Result<u16, AppError> {
+    let redirect_status_code = parse_env("REDIRECT_STATUS_CODE", 302_u16)?;
+
+    match redirect_status_code {
+        301 | 302 => Ok(redirect_status_code),
+        other => Err(AppError::Configuration(format!(
+            "unsupported redirect status code `{other}`; expected 301 or 302"
         ))),
     }
 }

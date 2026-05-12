@@ -1,5 +1,7 @@
+CREATE SEQUENCE IF NOT EXISTS short_urls_id_seq AS BIGINT;
+
 CREATE TABLE IF NOT EXISTS short_urls (
-  id BIGINT PRIMARY KEY,
+  id BIGINT PRIMARY KEY DEFAULT nextval('short_urls_id_seq'),
   short_code VARCHAR(16) NOT NULL UNIQUE,
   long_url TEXT NOT NULL,
   normalized_long_url TEXT NOT NULL UNIQUE,
