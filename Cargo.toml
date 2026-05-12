@@ -4,16 +4,18 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-async-trait = "0.1.89"
-axum = "0.8.6"
-http-body-util = "0.1.3"
+axum = "0.8.9"
+config = { version = "0.15.19", default-features = false, features = ["toml"] }
 redis = { version = "0.32.7", features = ["aio", "tokio-comp"] }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
+serde_json = "1.0.149"
 sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "macros", "migrate"] }
-thiserror = "2.0.17"
-tokio = { version = "1.48.0", features = ["full"] }
-tower = { version = "0.5.2", features = ["util"] }
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
-url = "2.5.7"
+thiserror = "2.0.18"
+tokio = { version = "1.52.3", features = ["full"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+url = "2.5.8"
+
+[dev-dependencies]
+reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
+uuid = { version = "1.18.1", features = ["v4"] }

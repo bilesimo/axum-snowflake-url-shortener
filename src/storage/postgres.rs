@@ -1,17 +1,29 @@
-use async_trait::async_trait;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 
-use crate::{
-    domain::model::{NewShortUrl, ShortUrl},
-    error::AppError,
-    storage::UrlRepository,
-};
+use crate::{domain::model::ShortUrl, error::AppError};
 
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
 #[derive(Clone, Debug)]
 pub struct PostgresUrlRepository {
     pool: PgPool,
+}
+
+#[derive(sqlx::FromRow)]
+struct ShortUrlRow {
+    id: i64,
+    short_code: String,
+    long_url: String,
+}
+
+impl From<ShortUrlRow> for ShortUrl {
+    fn from(row: ShortUrlRow) -> Self {
+        Self {
+            id: row.id,
+            short_code: row.short_code,
+            long_url: row.long_url,
+        }
+    }
 }
 
 impl PostgresUrlRepository {
@@ -28,7 +40,7 @@ impl PostgresUrlRepository {
             .max_connections(max_connections)
             .connect(database_url)
             .await
-            .map_err(|error| AppError::Internal(format!("failed to connect to postgres: {error}")))?;
+            .map_err(|error| AppError::Internal(format!("failed to connect to Postgres: {error}")))?;
 
         Ok(Self::new(pool))
     }
@@ -39,33 +51,11 @@ impl PostgresUrlRepository {
             .await
             .map_err(|error| AppError::Internal(format!("failed to run postgres migrations: {error}")))
     }
-}
 
-#[derive(sqlx::FromRow)]
-struct ShortUrlRow {
-    id: i64,
-    short_code: String,
-    long_url: String,
-    normalized_long_url: String,
-}
-
-impl From<ShortUrlRow> for ShortUrl {
-    fn from(row: ShortUrlRow) -> Self {
-        Self {
-            id: row.id,
-            short_code: row.short_code,
-            long_url: row.long_url,
-            normalized_long_url: row.normalized_long_url,
-        }
-    }
-}
-
-#[async_trait]
-impl UrlRepository for PostgresUrlRepository {
-    async fn find_by_short_code(&self, short_code: &str) -> Result<Option<ShortUrl>, AppError> {
+    pub async fn find_by_short_code(&self, short_code: &str) -> Result<Option<ShortUrl>, AppError> {
         let row = sqlx::query_as::<_, ShortUrlRow>(
             r#"
-            SELECT id, short_code, long_url, normalized_long_url
+            SELECT id, short_code, long_url
             FROM short_urls
             WHERE short_code = $1
             "#,
@@ -78,37 +68,35 @@ impl UrlRepository for PostgresUrlRepository {
         Ok(row.map(Into::into))
     }
 
-    async fn find_by_normalized_long_url(
-        &self,
-        normalized_long_url: &str,
-    ) -> Result<Option<ShortUrl>, AppError> {
+    pub async fn find_by_long_url(&self, long_url: &str) -> Result<Option<ShortUrl>, AppError> {
         let row = sqlx::query_as::<_, ShortUrlRow>(
             r#"
-            SELECT id, short_code, long_url, normalized_long_url
+            SELECT id, short_code, long_url
             FROM short_urls
-            WHERE normalized_long_url = $1
+            WHERE long_url = $1
+            ORDER BY created_at ASC
+            LIMIT 1
             "#,
         )
-        .bind(normalized_long_url)
+        .bind(long_url)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|error| AppError::Internal(format!("failed to query normalized long url: {error}")))?;
+        .map_err(|error| AppError::Internal(format!("failed to query long URL: {error}")))?;
 
         Ok(row.map(Into::into))
     }
 
-    async fn insert(&self, new_short_url: &NewShortUrl) -> Result<ShortUrl, AppError> {
+    pub async fn insert(&self, short_url: &ShortUrl) -> Result<ShortUrl, AppError> {
         let row = sqlx::query_as::<_, ShortUrlRow>(
             r#"
-            INSERT INTO short_urls (id, short_code, long_url, normalized_long_url)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, short_code, long_url, normalized_long_url
+            INSERT INTO short_urls (id, short_code, long_url)
+            VALUES ($1, $2, $3)
+            RETURNING id, short_code, long_url
             "#,
         )
-        .bind(new_short_url.id)
-        .bind(&new_short_url.short_code)
-        .bind(&new_short_url.long_url)
-        .bind(&new_short_url.normalized_long_url)
+        .bind(short_url.id)
+        .bind(&short_url.short_code)
+        .bind(&short_url.long_url)
         .fetch_one(&self.pool)
         .await
         .map_err(map_insert_error)?;
@@ -120,9 +108,9 @@ impl UrlRepository for PostgresUrlRepository {
 fn map_insert_error(error: sqlx::Error) -> AppError {
     if let sqlx::Error::Database(database_error) = &error {
         if database_error.code().as_deref() == Some("23505") {
-            return AppError::Conflict(format!("short url mapping already exists: {database_error}"));
+            return AppError::Conflict(format!("short code already exists: {database_error}"));
         }
     }
 
-    AppError::Internal(format!("failed to insert short url mapping: {error}"))
+    AppError::Internal(format!("failed to insert short URL mapping: {error}"))
 }

@@ -5,7 +5,7 @@ use axum::{
     response::Response,
 };
 
-use crate::{AppState, error::AppError};
+use crate::{error::AppError, startup::AppState};
 
 use super::dto::{HealthResponse, ShortenRequest, ShortenResponse};
 
@@ -18,7 +18,7 @@ pub async fn shorten(
         short_code: short_url.short_code.clone(),
         short_url: format!(
             "{}/{}",
-            state.config.base_url.trim_end_matches('/'),
+            state.settings.application.base_url.trim_end_matches('/'),
             short_url.short_code
         ),
         long_url: short_url.long_url,
@@ -41,7 +41,7 @@ pub async fn redirect(
     })?;
 
     let mut response = Response::new(axum::body::Body::empty());
-    *response.status_mut() = state.config.redirect_status();
+    *response.status_mut() = state.settings.application.redirect_status();
     response.headers_mut().insert(LOCATION, location);
 
     Ok(response)
