@@ -64,7 +64,8 @@ pub async fn spawn_app() -> TestApp {
 
     configure_database(&configuration.database).await;
 
-    let redis_client = Client::open(configuration.redis.url.clone()).expect("invalid Redis URL");
+    let redis_client =
+        Client::open(configuration.redis.connection_string()).expect("invalid Redis URL");
     let application = Application::build(configuration.clone())
         .await
         .expect("failed to build application");

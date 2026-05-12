@@ -7,8 +7,7 @@ CREATE TABLE IF NOT EXISTS short_urls (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- `short_code` already has an index via the UNIQUE constraint above.
+-- This index exists for chapter-8 deduplication lookups by exact `long_url`.
 CREATE INDEX IF NOT EXISTS idx_short_urls_long_url
   ON short_urls (long_url);
-
-CREATE INDEX IF NOT EXISTS idx_short_urls_created_at
-  ON short_urls (created_at DESC);

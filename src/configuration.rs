@@ -32,7 +32,8 @@ pub struct DatabaseSettings {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct RedisSettings {
-    pub url: String,
+    pub host: String,
+    pub port: u16,
     pub key_prefix: String,
 }
 
@@ -73,6 +74,12 @@ impl DatabaseSettings {
 
     pub fn with_db(&self) -> PgConnectOptions {
         self.without_db().database(&self.database_name)
+    }
+}
+
+impl RedisSettings {
+    pub fn connection_string(&self) -> String {
+        format!("redis://{}:{}", self.host, self.port)
     }
 }
 

@@ -17,7 +17,7 @@ impl RedisUrlCache {
     }
 
     pub fn from_settings(settings: &RedisSettings) -> Result<Self, AppError> {
-        let client = Client::open(settings.url.clone())
+        let client = Client::open(settings.connection_string())
             .map_err(|error| AppError::Configuration(format!("invalid Redis URL: {error}")))?;
 
         Ok(Self::new(client, settings.key_prefix.clone()))
