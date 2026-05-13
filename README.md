@@ -86,6 +86,3 @@ All local settings live in [config.toml](/Users/bilesimo/Development/url-shorten
 - `src/error.rs`: shared error types
 - `tests/api/`: integration tests using real Postgres and Redis instances
 - `docker-compose.yml`: local Postgres and Redis stack
-- `docs/implementation-plan.md`: phased implementation plan
-
-See [docs/implementation-plan.md](/Users/bilesimo/Development/url-shortener/docs/implementation-plan.md) for the detailed build plan.
