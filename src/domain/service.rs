@@ -30,10 +30,18 @@ impl UrlShortenerService {
 
     #[instrument(skip(self), fields(long_url))]
     pub async fn create_short_url(&self, long_url: &str) -> Result<ShortUrl, AppError> {
-        validate_url(long_url)?;
+        let normalized_long_url = normalize_url(long_url)?;
 
-        if let Some(existing) = self.repository.find_by_long_url(long_url).await? {
-            debug!(short_code = %existing.short_code, "deduplicated long URL using existing mapping");
+        if let Some(existing) = self
+            .repository
+            .find_by_long_url(&normalized_long_url)
+            .await?
+        {
+            debug!(
+                short_code = %existing.short_code,
+                normalized_long_url = %normalized_long_url,
+                "deduplicated normalized long URL using existing mapping"
+            );
             return Ok(existing);
         }
 
@@ -41,7 +49,7 @@ impl UrlShortenerService {
         let short_url = ShortUrl {
             id,
             short_code: encode_base62(id as u64),
-            long_url: long_url.to_owned(),
+            long_url: normalized_long_url,
         };
 
         let inserted = self.repository.insert(&short_url).await?;
@@ -72,8 +80,8 @@ impl UrlShortenerService {
     }
 }
 
-pub fn validate_url(input: &str) -> Result<(), AppError> {
-    let parsed =
+pub fn normalize_url(input: &str) -> Result<String, AppError> {
+    let mut parsed =
         Url::parse(input).map_err(|error| AppError::Validation(format!("invalid URL: {error}")))?;
 
     if parsed.scheme() != "http" && parsed.scheme() != "https" {
@@ -82,5 +90,43 @@ pub fn validate_url(input: &str) -> Result<(), AppError> {
         ));
     }
 
-    Ok(())
+    let remove_default_port = matches!(
+        (parsed.scheme(), parsed.port()),
+        ("http", Some(80)) | ("https", Some(443))
+    );
+    if remove_default_port {
+        parsed
+            .set_port(None)
+            .map_err(|()| AppError::Validation("failed to normalize URL port".to_owned()))?;
+    }
+
+    Ok(parsed.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_url;
+    use crate::error::AppError;
+
+    #[test]
+    fn normalize_url_lowercases_host_and_removes_default_port() {
+        let normalized = normalize_url("HTTPS://Example.COM:443/articles/123?draft=true")
+            .expect("normalized URL");
+
+        assert_eq!(normalized, "https://example.com/articles/123?draft=true");
+    }
+
+    #[test]
+    fn normalize_url_keeps_fragment_when_present() {
+        let normalized =
+            normalize_url("https://example.com/articles/123#summary").expect("normalized URL");
+
+        assert_eq!(normalized, "https://example.com/articles/123#summary");
+    }
+
+    #[test]
+    fn normalize_url_rejects_non_http_urls() {
+        let error = normalize_url("ftp://example.com/file").expect_err("validation error");
+        assert!(matches!(error, AppError::Validation(_)));
+    }
 }

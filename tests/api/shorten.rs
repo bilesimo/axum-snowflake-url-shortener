@@ -7,7 +7,9 @@ use super::helpers::spawn_app;
 async fn shorten_creates_a_mapping_and_persists_it() {
     let app = spawn_app().await;
 
-    let response = app.post_shorten("https://example.com/articles/123").await;
+    let response = app
+        .post_shorten("HTTPS://Example.COM:443/articles/123")
+        .await;
     assert_eq!(response.status(), StatusCode::CREATED);
 
     let payload: Value = response.json().await.expect("invalid JSON response");
@@ -34,11 +36,11 @@ async fn shorten_creates_a_mapping_and_persists_it() {
 }
 
 #[tokio::test]
-async fn shorten_deduplicates_repeated_long_urls() {
+async fn shorten_deduplicates_equivalent_long_urls_after_normalization() {
     let app = spawn_app().await;
 
     let first: Value = app
-        .post_shorten("https://example.com/same-url")
+        .post_shorten("HTTPS://Example.COM:443/same-url")
         .await
         .json()
         .await
@@ -51,6 +53,8 @@ async fn shorten_deduplicates_repeated_long_urls() {
         .expect("second response JSON");
 
     assert_eq!(first["short_code"], second["short_code"]);
+    assert_eq!(first["long_url"], "https://example.com/same-url");
+    assert_eq!(second["long_url"], "https://example.com/same-url");
 
     let count =
         sqlx::query_scalar::<_, i64>(r#"SELECT COUNT(*) FROM short_urls WHERE long_url = $1"#)
