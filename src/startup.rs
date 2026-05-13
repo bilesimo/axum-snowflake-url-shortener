@@ -10,7 +10,7 @@ use crate::{
     domain::service::UrlShortenerService,
     error::AppError,
     http,
-    id::generator::SequenceIdGenerator,
+    id::generator::SnowflakeIdGenerator,
     storage::{postgres::PostgresUrlRepository, redis::RedisUrlCache},
 };
 
@@ -45,7 +45,7 @@ impl Application {
         repository.run_migrations().await?;
 
         let cache = RedisUrlCache::from_settings(&settings.redis)?;
-        let id_generator = SequenceIdGenerator::new(pool, "short_urls_id_seq");
+        let id_generator = SnowflakeIdGenerator::new(&settings.id)?;
         let service = UrlShortenerService::new(repository, cache, id_generator);
 
         let router = http::router::build_router(AppState {

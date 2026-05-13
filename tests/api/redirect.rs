@@ -17,7 +17,7 @@ async fn redirect_returns_location_header_for_existing_code() {
 
     let response = app.get_redirect(short_code).await;
 
-    assert_eq!(response.status(), StatusCode::FOUND);
+    assert_eq!(response.status(), StatusCode::MOVED_PERMANENTLY);
     assert_eq!(
         response
             .headers()
@@ -40,7 +40,7 @@ async fn redirect_uses_redis_after_the_first_database_lookup() {
     let short_code = payload["short_code"].as_str().expect("short code");
 
     let first_response = app.get_redirect(short_code).await;
-    assert_eq!(first_response.status(), StatusCode::FOUND);
+    assert_eq!(first_response.status(), StatusCode::MOVED_PERMANENTLY);
     assert_eq!(
         app.cached_long_url(short_code).await.as_deref(),
         Some("https://example.com/cache-me")
@@ -49,7 +49,7 @@ async fn redirect_uses_redis_after_the_first_database_lookup() {
     app.delete_short_url_from_db(short_code).await;
 
     let second_response = app.get_redirect(short_code).await;
-    assert_eq!(second_response.status(), StatusCode::FOUND);
+    assert_eq!(second_response.status(), StatusCode::MOVED_PERMANENTLY);
     assert_eq!(
         second_response
             .headers()

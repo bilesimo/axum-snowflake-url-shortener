@@ -1,4 +1,5 @@
 use redis::{AsyncCommands, Client};
+use tracing::trace;
 
 use crate::{configuration::RedisSettings, error::AppError};
 
@@ -6,13 +7,15 @@ use crate::{configuration::RedisSettings, error::AppError};
 pub struct RedisUrlCache {
     client: Client,
     key_prefix: String,
+    ttl_seconds: u64,
 }
 
 impl RedisUrlCache {
-    pub fn new(client: Client, key_prefix: impl Into<String>) -> Self {
+    pub fn new(client: Client, key_prefix: impl Into<String>, ttl_seconds: u64) -> Self {
         Self {
             client,
             key_prefix: key_prefix.into(),
+            ttl_seconds,
         }
     }
 
@@ -20,7 +23,11 @@ impl RedisUrlCache {
         let client = Client::open(settings.connection_string())
             .map_err(|error| AppError::Configuration(format!("invalid Redis URL: {error}")))?;
 
-        Ok(Self::new(client, settings.key_prefix.clone()))
+        Ok(Self::new(
+            client,
+            settings.key_prefix.clone(),
+            settings.ttl_seconds,
+        ))
     }
 
     pub fn key_for(&self, short_code: &str) -> String {
@@ -33,9 +40,11 @@ impl RedisUrlCache {
             .get_multiplexed_async_connection()
             .await
             .map_err(|error| AppError::Internal(format!("failed to connect to Redis: {error}")))?;
+        let key = self.key_for(short_code);
+        trace!(%key, "reading URL from Redis");
 
         connection
-            .get(self.key_for(short_code))
+            .get(key)
             .await
             .map_err(|error| AppError::Internal(format!("failed to read from Redis: {error}")))
     }
@@ -46,9 +55,11 @@ impl RedisUrlCache {
             .get_multiplexed_async_connection()
             .await
             .map_err(|error| AppError::Internal(format!("failed to connect to Redis: {error}")))?;
+        let key = self.key_for(short_code);
+        trace!(%key, ttl_seconds = self.ttl_seconds, "writing URL to Redis with TTL");
 
         connection
-            .set(self.key_for(short_code), long_url)
+            .set_ex(key, long_url, self.ttl_seconds)
             .await
             .map_err(|error| AppError::Internal(format!("failed to write to Redis: {error}")))
     }

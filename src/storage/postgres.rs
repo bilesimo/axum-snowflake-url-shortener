@@ -1,4 +1,5 @@
 use sqlx::{PgPool, postgres::PgPoolOptions};
+use tracing::trace;
 
 use crate::{domain::model::ShortUrl, error::AppError};
 
@@ -40,19 +41,21 @@ impl PostgresUrlRepository {
             .max_connections(max_connections)
             .connect(database_url)
             .await
-            .map_err(|error| AppError::Internal(format!("failed to connect to Postgres: {error}")))?;
+            .map_err(|error| {
+                AppError::Internal(format!("failed to connect to Postgres: {error}"))
+            })?;
 
         Ok(Self::new(pool))
     }
 
     pub async fn run_migrations(&self) -> Result<(), AppError> {
-        MIGRATOR
-            .run(&self.pool)
-            .await
-            .map_err(|error| AppError::Internal(format!("failed to run postgres migrations: {error}")))
+        MIGRATOR.run(&self.pool).await.map_err(|error| {
+            AppError::Internal(format!("failed to run postgres migrations: {error}"))
+        })
     }
 
     pub async fn find_by_short_code(&self, short_code: &str) -> Result<Option<ShortUrl>, AppError> {
+        trace!(%short_code, "querying Postgres by short code");
         let row = sqlx::query_as::<_, ShortUrlRow>(
             r#"
             SELECT id, short_code, long_url
@@ -69,6 +72,7 @@ impl PostgresUrlRepository {
     }
 
     pub async fn find_by_long_url(&self, long_url: &str) -> Result<Option<ShortUrl>, AppError> {
+        trace!(%long_url, "querying Postgres by long URL");
         let row = sqlx::query_as::<_, ShortUrlRow>(
             r#"
             SELECT id, short_code, long_url
@@ -87,6 +91,7 @@ impl PostgresUrlRepository {
     }
 
     pub async fn insert(&self, short_url: &ShortUrl) -> Result<ShortUrl, AppError> {
+        trace!(id = short_url.id, short_code = %short_url.short_code, "inserting short URL into Postgres");
         let row = sqlx::query_as::<_, ShortUrlRow>(
             r#"
             INSERT INTO short_urls (id, short_code, long_url)
@@ -106,10 +111,10 @@ impl PostgresUrlRepository {
 }
 
 fn map_insert_error(error: sqlx::Error) -> AppError {
-    if let sqlx::Error::Database(database_error) = &error {
-        if database_error.code().as_deref() == Some("23505") {
-            return AppError::Conflict(format!("short code already exists: {database_error}"));
-        }
+    if let sqlx::Error::Database(database_error) = &error
+        && database_error.code().as_deref() == Some("23505")
+    {
+        return AppError::Conflict(format!("short code already exists: {database_error}"));
     }
 
     AppError::Internal(format!("failed to insert short URL mapping: {error}"))

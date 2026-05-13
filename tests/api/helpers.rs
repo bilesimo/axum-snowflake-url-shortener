@@ -1,11 +1,9 @@
 use redis::{AsyncCommands, Client};
 use reqwest::{Client as HttpClient, Response, redirect::Policy};
-use sqlx::{Connection, Executor, PgConnection, PgPool};
-use url_shortener::{
-    configuration::{DatabaseSettings, get_configuration},
-    startup::{Application, get_connection_pool},
-};
-use uuid::Uuid;
+use sqlx::PgPool;
+use url_shortener::startup::{Application, get_connection_pool};
+
+use crate::helpers::test_configuration;
 
 pub struct TestApp {
     pub address: String,
@@ -56,13 +54,7 @@ impl TestApp {
 }
 
 pub async fn spawn_app() -> TestApp {
-    let mut configuration = get_configuration().expect("failed to read configuration");
-    configuration.database.database_name = Uuid::new_v4().to_string();
-    configuration.application.port = 0;
-    configuration.application.base_url = String::new();
-    configuration.redis.key_prefix = format!("test-shorturl-{}", Uuid::new_v4());
-
-    configure_database(&configuration.database).await;
+    let configuration = test_configuration().await;
 
     let redis_client =
         Client::open(configuration.redis.connection_string()).expect("invalid Redis URL");
@@ -84,15 +76,4 @@ pub async fn spawn_app() -> TestApp {
             .build()
             .expect("failed to build reqwest client"),
     }
-}
-
-async fn configure_database(config: &DatabaseSettings) {
-    let mut connection = PgConnection::connect_with(&config.without_db())
-        .await
-        .expect("failed to connect to Postgres without database");
-
-    connection
-        .execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
-        .await
-        .expect("failed to create test database");
 }

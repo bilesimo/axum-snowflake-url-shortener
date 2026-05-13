@@ -9,6 +9,7 @@ pub struct Settings {
     pub application: ApplicationSettings,
     pub database: DatabaseSettings,
     pub redis: RedisSettings,
+    pub id: IdSettings,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -35,6 +36,13 @@ pub struct RedisSettings {
     pub host: String,
     pub port: u16,
     pub key_prefix: String,
+    pub ttl_seconds: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct IdSettings {
+    pub node_id: u16,
+    pub epoch_millis: u64,
 }
 
 impl ApplicationSettings {
@@ -43,9 +51,7 @@ impl ApplicationSettings {
     }
 
     pub fn bind_address(&self) -> SocketAddr {
-        self.address_string()
-            .parse()
-            .expect("invalid bind address")
+        self.address_string().parse().expect("invalid bind address")
     }
 
     pub fn redirect_status(&self) -> StatusCode {

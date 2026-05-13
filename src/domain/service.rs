@@ -1,9 +1,10 @@
+use tracing::{debug, info, instrument, trace};
 use url::Url;
 
 use crate::{
     domain::model::ShortUrl,
     error::AppError,
-    id::{base62::encode_base62, generator::SequenceIdGenerator},
+    id::{base62::encode_base62, generator::SnowflakeIdGenerator},
     storage::{postgres::PostgresUrlRepository, redis::RedisUrlCache},
 };
 
@@ -11,14 +12,14 @@ use crate::{
 pub struct UrlShortenerService {
     repository: PostgresUrlRepository,
     cache: RedisUrlCache,
-    id_generator: SequenceIdGenerator,
+    id_generator: SnowflakeIdGenerator,
 }
 
 impl UrlShortenerService {
     pub fn new(
         repository: PostgresUrlRepository,
         cache: RedisUrlCache,
-        id_generator: SequenceIdGenerator,
+        id_generator: SnowflakeIdGenerator,
     ) -> Self {
         Self {
             repository,
@@ -27,10 +28,12 @@ impl UrlShortenerService {
         }
     }
 
+    #[instrument(skip(self), fields(long_url))]
     pub async fn create_short_url(&self, long_url: &str) -> Result<ShortUrl, AppError> {
         validate_url(long_url)?;
 
         if let Some(existing) = self.repository.find_by_long_url(long_url).await? {
+            debug!(short_code = %existing.short_code, "deduplicated long URL using existing mapping");
             return Ok(existing);
         }
 
@@ -41,14 +44,19 @@ impl UrlShortenerService {
             long_url: long_url.to_owned(),
         };
 
-        self.repository.insert(&short_url).await
+        let inserted = self.repository.insert(&short_url).await?;
+        info!(id = inserted.id, short_code = %inserted.short_code, "created short URL mapping");
+        Ok(inserted)
     }
 
+    #[instrument(skip(self), fields(short_code))]
     pub async fn resolve_short_code(&self, short_code: &str) -> Result<String, AppError> {
         if let Some(long_url) = self.cache.get_long_url(short_code).await? {
+            trace!("cache hit for short code");
             return Ok(long_url);
         }
 
+        trace!("cache miss for short code");
         let short_url = self
             .repository
             .find_by_short_code(short_code)
@@ -58,14 +66,15 @@ impl UrlShortenerService {
         self.cache
             .set_long_url(short_code, &short_url.long_url)
             .await?;
+        debug!("backfilled cache for short code");
 
         Ok(short_url.long_url)
     }
 }
 
 pub fn validate_url(input: &str) -> Result<(), AppError> {
-    let parsed = Url::parse(input)
-        .map_err(|error| AppError::Validation(format!("invalid URL: {error}")))?;
+    let parsed =
+        Url::parse(input).map_err(|error| AppError::Validation(format!("invalid URL: {error}")))?;
 
     if parsed.scheme() != "http" && parsed.scheme() != "https" {
         return Err(AppError::Validation(

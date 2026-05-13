@@ -73,6 +73,9 @@ mod tests {
 
     #[test]
     fn rejects_invalid_characters() {
-        assert_eq!(decode_base62("hello!"), Err(Base62Error::InvalidCharacter('!')));
+        assert_eq!(
+            decode_base62("hello!"),
+            Err(Base62Error::InvalidCharacter('!'))
+        );
     }
 }
