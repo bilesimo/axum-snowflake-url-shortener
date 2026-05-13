@@ -6,7 +6,9 @@ use crate::helpers::{redis_client, test_configuration};
 #[tokio::test]
 async fn redis_cache_sets_and_gets_long_url() {
     let configuration = test_configuration().await;
-    let cache = RedisUrlCache::from_settings(&configuration.redis).expect("cache");
+    let cache = RedisUrlCache::from_settings(&configuration.redis)
+        .await
+        .expect("cache");
 
     cache
         .set_long_url("abc123", "https://example.com/from-redis")
@@ -20,7 +22,9 @@ async fn redis_cache_sets_and_gets_long_url() {
 #[tokio::test]
 async fn redis_cache_sets_a_ttl() {
     let configuration = test_configuration().await;
-    let cache = RedisUrlCache::from_settings(&configuration.redis).expect("cache");
+    let cache = RedisUrlCache::from_settings(&configuration.redis)
+        .await
+        .expect("cache");
 
     cache
         .set_long_url("ttl123", "https://example.com/ttl")

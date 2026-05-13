@@ -7,6 +7,8 @@ pub const BASE62_ALPHABET: &[u8; 62] =
 pub enum Base62Error {
     #[error("input contains an invalid base62 character: `{0}`")]
     InvalidCharacter(char),
+    #[error("input exceeds the range of a u64 value")]
+    Overflow,
 }
 
 pub fn encode_base62(mut value: u64) -> String {
@@ -34,7 +36,9 @@ pub fn decode_base62(input: &str) -> Result<u64, Base62Error> {
             _ => return Err(Base62Error::InvalidCharacter(character)),
         };
 
-        Ok(acc * 62 + value)
+        acc.checked_mul(62)
+            .and_then(|acc| acc.checked_add(value))
+            .ok_or(Base62Error::Overflow)
     })
 }
 
@@ -77,5 +81,12 @@ mod tests {
             decode_base62("hello!"),
             Err(Base62Error::InvalidCharacter('!'))
         );
+    }
+
+    #[test]
+    fn rejects_values_that_overflow_u64() {
+        let input = format!("{}0", encode_base62(u64::MAX));
+
+        assert_eq!(decode_base62(&input), Err(Base62Error::Overflow));
     }
 }
