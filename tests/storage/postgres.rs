@@ -58,3 +58,42 @@ async fn postgres_repository_finds_by_long_url() {
     assert_eq!(fetched.short_code, "def456");
     assert_eq!(fetched.id, 456);
 }
+
+#[tokio::test]
+async fn postgres_repository_returns_existing_row_on_long_url_conflict() {
+    let configuration = test_configuration().await;
+    let pool = get_connection_pool(&configuration.database)
+        .await
+        .expect("failed to connect to Postgres");
+    let repository = PostgresUrlRepository::new(pool);
+    repository.run_migrations().await.expect("migrations");
+
+    let first = repository
+        .insert(&ShortUrl {
+            id: 100,
+            short_code: "first".to_owned(),
+            long_url: "https://example.com/conflict".to_owned(),
+        })
+        .await
+        .expect("first insert");
+
+    let second = repository
+        .insert(&ShortUrl {
+            id: 101,
+            short_code: "second".to_owned(),
+            long_url: "https://example.com/conflict".to_owned(),
+        })
+        .await
+        .expect("second insert");
+
+    assert_eq!(second, first);
+
+    let count =
+        sqlx::query_scalar::<_, i64>(r#"SELECT COUNT(*) FROM short_urls WHERE long_url = $1"#)
+            .bind("https://example.com/conflict")
+            .fetch_one(repository.pool())
+            .await
+            .expect("count");
+
+    assert_eq!(count, 1);
+}

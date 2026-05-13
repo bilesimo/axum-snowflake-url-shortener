@@ -96,6 +96,8 @@ impl PostgresUrlRepository {
             r#"
             INSERT INTO short_urls (id, short_code, long_url)
             VALUES ($1, $2, $3)
+            ON CONFLICT (long_url) DO UPDATE
+              SET long_url = EXCLUDED.long_url
             RETURNING id, short_code, long_url
             "#,
         )
@@ -114,7 +116,7 @@ fn map_insert_error(error: sqlx::Error) -> AppError {
     if let sqlx::Error::Database(database_error) = &error
         && database_error.code().as_deref() == Some("23505")
     {
-        return AppError::Conflict(format!("short code already exists: {database_error}"));
+        return AppError::Conflict(format!("short URL uniqueness conflict: {database_error}"));
     }
 
     AppError::Internal(format!("failed to insert short URL mapping: {error}"))
