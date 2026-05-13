@@ -9,7 +9,7 @@ config = { version = "0.15.19", default-features = false, features = ["toml"] }
 redis = { version = "0.32.7", features = ["aio", "tokio-comp", "connection-manager"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "macros", "migrate"] }
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio-rustls", "postgres", "macros", "migrate"] }
 thiserror = "2.0.18"
 tokio = { version = "1.52.3", features = ["full"] }
 tracing = "0.1.44"
